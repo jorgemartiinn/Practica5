@@ -1,0 +1,148 @@
+---
+title: "PRACTICA 5"
+author: "Jorge Martin, Samuel Durá y Marc Domingo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    number_sections: no
+    toc_depth: 2
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+  always_allow_html: true
+---
+# 1.One dimensional Partial Dependence Plot.
+The partial dependence plot shows the marginal effect of a feature on the predicted outcome of a previously fit model.
+ 
+## EXERCISE:
+Apply PDP to the regression example of predicting bike rentals. Fit a random forest approximation for the prediction of bike rentals (cnt). Use the partial dependence plot to visualize the relationships the model learned. Use the slides shown in class as model.  
+
+```{r}
+# Load required packages
+library(randomForest)
+library(pdp)
+library(readr)
+library(dplyr)
+library(ggplot2)
+# Load bike rental dataset
+day <- read_csv("day.csv", show_col_types = "FALSE") 
+day <- day %>%
+  mutate(spring = ifelse(season == 1, 1, 0),
+         summer = ifelse(season == 2, 1, 0),
+         fall = ifelse(season == 3, 1, 0))
+day <- day %>%
+  mutate(MISTY = ifelse(weathersit == 2, 1, 0),
+         RAIN = ifelse(weathersit %in% c(3,4), 1, 0))
+day <- day %>%
+  mutate(hum = hum * 100,
+         windspeed = windspeed * 67)
+t_min <- -8
+t_max <- 39
+day$temp <- day$temp * (t_max - t_min) + t_min
+day$dteday <- as.Date(day$dteday)
+start_date <- as.Date("2011-01-01")
+day$days_since_2011 <- as.numeric(day$dteday - start_date)
+
+# Fit random forest model
+rf_model <- randomForest(cnt ~ workingday + holiday + spring + summer + fall + MISTY + RAIN + temp + hum + windspeed + days_since_2011, data = day, ntree = 500, mtry = 3)
+
+# Create PDP
+temp_pdp <- partial(rf_model, pred.var = "temp", plot = TRUE, plot.engine = "ggplot2")
+temp_pdp
+temp_pdp <- partial(rf_model, pred.var = "hum", plot = TRUE, plot.engine = "ggplot2")
+temp_pdp
+temp_pdp <- partial(rf_model, pred.var = "windspeed", plot = TRUE, plot.engine = "ggplot2")
+temp_pdp
+temp_pdp <- partial(rf_model, pred.var = "days_since_2011", plot = TRUE, plot.engine = "ggplot2")
+temp_pdp
+```
+
+## QUESTION:
+Analyse the influence of days since 2011, temperature, humidity and wind speed on the predicted bike counts.
+
+We have created a plot showing the relationship between temperature and bike rentals, with the x-axis representing temperature and the y-axis representing predicted bike rentals. We can observe that when temperatures are close to 20 degrees, bike rentals are at their highest because when it's warm, it's usually more tempting to take a bike than when it's colder.
+
+On the other hand, we can also observe that when there is higher humidity, people usually don't rent bikes. This is because in conditions with high humidity, the ground could be slippery and not optimal for biking, and there would be a high probability of fog.
+
+Regarding wind speed, we observe that when there is a lower amount of it, the number of rented bikes is higher because the risk of falling is much lower. When the wind exceeds 25 km/h, the number of rented bikes is almost nonexistent.
+
+Finally, the number of rented bikes since 2011 has been increasing because the company has managed to attract a greater number of customers, and thus, has been able to have more bikes available for rent, creating a positive feedback loop.
+
+# 2.Bidimensional Partial Dependency Plot.
+
+## EXERCISE:
+Generate a 2D Partial Dependency Plot with humidity and temperature to predict the number of bikes rented depending on those parameters.
+
+BE CAREFUL: due to the size, extract a set of random samples from the BBDD before generating the data for the Partial Dependency Plot. 
+
+Show the density distribution of both input features with the 2D plot as shown in the class slides. 
+
+TIP: Use geom_tile() to generate the 2D plot. Set width and height to avoid holes. 
+
+```{r}
+# Select random samples
+set.seed(123)
+day_sample <- day %>% sample_n(300)
+# Fit random forest model
+rf_model <- randomForest(cnt ~ workingday + holiday + spring + summer + fall + MISTY + RAIN + temp + hum + windspeed + days_since_2011, data = day_sample, ntree = 500, mtry = 3)
+
+# Generate 2D partial dependence plot for temperature and humidity
+temp_hum_pdp <- partial(rf_model, pred.var = c("temp", "hum"), plot = FALSE)
+
+# Create plot
+ggplot(temp_hum_pdp, aes(x = temp, y = hum, fill = yhat)) +
+  geom_tile(aes(width = 3, height = 3)) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  geom_density2d() +
+  theme_bw() +
+  xlab("Temperature") +
+  ylab("Humidity") +
+  ggtitle("2D Partial Dependence Plot for Temperature and Humidity")
+```
+
+
+## QUESTION:
+Interpret the results.
+
+The resulting plot shows how the predicted bike rentals vary with temperature and humidity. We can see that bike rentals tend to be highest when the temperature is around 25 degrees Celsius and the humidity is around 60%. Bike rentals decrease with very high humidity and with a temperature lower than 15 degrees.
+
+# 3.PDP to explain the price of a house.
+## EXERCISE:
+Apply the previous concepts to predict the price of a house from the database kc_house_data.csv. In this case, use again a random forest approximation for the prediction based on the features bedrooms, bathrooms, sqft_living, sqft_lot, floors and yr_built. 
+Use the partial dependence plot to visualize the relationships the model learned.
+
+BE CAREFUL: due to the size, extract a set of random samples from the BBDD before generating the data for the Partial Dependency Plot. 
+
+```{r}
+# Load house price dataset
+house <- read_csv("kc_house_data.csv", show_col_types = "FALSE")
+
+# Select random samples
+set.seed(123)
+house_sample <- house %>% sample_n(1000)
+
+# Fit random forest model
+rf_model <- randomForest(price ~ bedrooms + bathrooms + sqft_living + sqft_lot + floors + yr_built, data = house_sample, ntree = 500, mtry = 3)
+
+# Generate partial dependence plot for selected features
+house_pdp <- partial(rf_model, pred.var = c("bedrooms"), plot = TRUE, plot.engine = "ggplot2")
+house_pdp
+house_pdp <- partial(rf_model, pred.var = c("bathrooms"), plot = TRUE, plot.engine = "ggplot2")
+house_pdp
+house_pdp <- partial(rf_model, pred.var = c("sqft_living"), plot = TRUE, plot.engine = "ggplot2")
+house_pdp
+house_pdp <- partial(rf_model, pred.var = c("floors"), plot = TRUE, plot.engine = "ggplot2")
+house_pdp
+```
+
+## QUESTION:
+Analyse the influence of bedrooms, bathrooms, sqft_living and floors on the predicted price.
+
+Firstly, we observe that the number of bedrooms does not have a significant influence on the price of houses. The most expensive houses are those that have 2 or 3 bedrooms or those that have more than 6 bedrooms. However, the cheapest houses are those that have 4 or 5 bedrooms.
+
+For the number of bathrooms in a house, we observe that houses with 5 or more bathrooms are much more expensive than houses with less than 5 bathrooms. This may be due to the fact that they are mansions or extremely large houses.
+
+The graph shows that as the size of the house in square feet (sqft_living) increases, the predicted price of the house also increases linearly. From 7000 square feet onwards, the price of houses skyrockets and becomes very high.
+
+Finally, the number of floors in a house greatly influences its price. We observe that houses with 3 or more floors have a much higher price than those with fewer floors. The cheapest houses are those that only have one floor.
